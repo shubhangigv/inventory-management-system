@@ -1,3 +1,4 @@
+import type { Prisma, SaleStatus } from "@/app/generated/prisma/client";
 import { AppError } from "@/lib/errors";
 import { calculateSaleTotals, sumMoney } from "@/lib/money";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +9,7 @@ import {
   type CreateSaleInput,
 } from "@/lib/validation/sales";
 import { applyStockMovement } from "./inventory";
+import { pageArgs, paginated } from "./pagination";
 import { reserveInvoiceNumber } from "./settings";
 import type { ActorOptions } from "./types";
 
@@ -152,5 +154,51 @@ export async function cancelSale(input: CancelSaleInput, { userId }: ActorOption
     }
 
     return tx.sale.findUniqueOrThrow({ where: { id: saleId }, include: saleWithDetails });
+  });
+}
+
+export type SaleListFilters = {
+  query?: string; // invoice number or customer name
+  status?: SaleStatus;
+  from?: Date; // inclusive
+  to?: Date; // exclusive
+  page?: number;
+};
+
+export async function listSales({ query, status, from, to, page }: SaleListFilters) {
+  const where: Prisma.SaleWhereInput = {
+    ...(query
+      ? {
+          OR: [
+            { invoiceNumber: { contains: query, mode: "insensitive" } },
+            { customerName: { contains: query, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+    ...(status ? { status } : {}),
+    ...(from || to ? { soldAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}),
+  };
+  const args = pageArgs(page);
+  const [rows, total] = await Promise.all([
+    prisma.sale.findMany({
+      where,
+      include: { _count: { select: { items: true } }, payments: { select: { method: true } } },
+      orderBy: [{ soldAt: "desc" }, { id: "desc" }],
+      skip: args.skip,
+      take: args.take,
+    }),
+    prisma.sale.count({ where }),
+  ]);
+  return paginated(rows, total, args.page);
+}
+
+export function getSale(id: string) {
+  return prisma.sale.findUnique({
+    where: { id },
+    include: {
+      items: { orderBy: { productName: "asc" } },
+      payments: { orderBy: { receivedAt: "asc" } },
+      createdBy: { select: { name: true } },
+    },
   });
 }

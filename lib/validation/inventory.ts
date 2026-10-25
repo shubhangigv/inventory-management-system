@@ -12,7 +12,7 @@ export const stockInSchema = z.object({
 export const stockAdjustmentSchema = z.object({
   productId: idSchema,
   quantityChange: z
-    .number()
+    .number({ error: "Enter a whole number, e.g. -3 or 5" })
     .int("Must be a whole number")
     .refine((n) => n !== 0, "Change can't be zero"),
   reason: z.string().trim().min(1, "Say why the stock is being adjusted").max(500),

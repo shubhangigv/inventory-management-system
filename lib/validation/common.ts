@@ -23,4 +23,4 @@ export const moneySchema = z
   .transform((value) => String(value).trim())
   .pipe(z.string().regex(/^\d{1,10}(\.\d{1,2})?$/, "Enter an amount like 12 or 12.50"));
 
-export const quantitySchema = z.number().int("Must be a whole number").positive("Must be at least 1");
+export const quantitySchema = z.number({ error: "Enter a whole number" }).int("Must be a whole number").positive("Must be at least 1");

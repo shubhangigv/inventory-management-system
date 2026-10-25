@@ -15,11 +15,18 @@ export const createProductSchema = z.object({
   costPrice: moneySchema,
   sellingPrice: moneySchema,
   // Recorded as a STOCK_IN movement, never written straight into stockQuantity.
-  openingStock: z.number().int().min(0).default(0),
-  reorderLevel: z.number().int().min(0).default(10),
+  openingStock: z.number({ error: "Enter a whole number" }).int().min(0, "Can't be negative").default(0),
+  reorderLevel: z.number({ error: "Enter a whole number" }).int().min(0, "Can't be negative").default(10),
   categoryId: idSchema.optional(),
   supplierId: idSchema.optional(),
 });
 
 /** What callers pass in (defaults are optional). */
 export type CreateProductInput = z.input<typeof createProductSchema>;
+
+/** Editing details only. Stock changes go through the inventory service. */
+export const updateProductSchema = createProductSchema.omit({ openingStock: true }).extend({
+  reorderLevel: z.number({ error: "Enter a whole number" }).int().min(0, "Can't be negative"),
+});
+
+export type UpdateProductInput = z.input<typeof updateProductSchema>;

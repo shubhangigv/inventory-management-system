@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { businessSettingsSchema, type BusinessSettingsInput } from "@/lib/validation/settings";
 import type { Tx } from "./types";
 
 // BusinessSettings has exactly one row, always with id 1.
@@ -11,6 +12,11 @@ export function getBusinessSettings() {
     create: { id: SETTINGS_ID },
     update: {},
   });
+}
+
+/** For pages: a plain read, falling back to creating the row only the first time. */
+export async function readBusinessSettings() {
+  return (await prisma.businessSettings.findUnique({ where: { id: SETTINGS_ID } })) ?? getBusinessSettings();
 }
 
 export function formatInvoiceNumber(prefix: string, number: number) {
@@ -34,4 +40,20 @@ export async function reserveInvoiceNumber(tx: Tx) {
     invoiceNumber: formatInvoiceNumber(settings.invoicePrefix, settings.nextInvoiceNumber - 1),
     taxRate: settings.taxRate,
   };
+}
+
+/** Saves the business details. The invoice counter is never edited here. */
+export function updateBusinessSettings(input: BusinessSettingsInput) {
+  const data = businessSettingsSchema.parse(input);
+  const values = {
+    ...data,
+    address: data.address ?? null,
+    phone: data.phone ?? null,
+    email: data.email ?? null,
+  };
+  return prisma.businessSettings.upsert({
+    where: { id: SETTINGS_ID },
+    create: { id: SETTINGS_ID, ...values },
+    update: values,
+  });
 }

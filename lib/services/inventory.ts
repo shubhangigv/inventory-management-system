@@ -1,4 +1,4 @@
-import type { StockMovementType } from "@/app/generated/prisma/client";
+import type { Prisma, StockMovementType } from "@/app/generated/prisma/client";
 import { AppError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import {
@@ -7,6 +7,7 @@ import {
   type StockAdjustmentInput,
   type StockInInput,
 } from "@/lib/validation/inventory";
+import { pageArgs, paginated } from "./pagination";
 import type { ActorOptions, Tx } from "./types";
 
 export type StockMovementInput = {
@@ -85,4 +86,35 @@ export async function adjustStock(input: StockAdjustmentInput, { userId }: Actor
       createdById: userId,
     }),
   );
+}
+
+export type StockMovementFilters = {
+  productId?: string;
+  type?: StockMovementType;
+  page?: number;
+};
+
+/** The stock ledger, newest first. */
+export async function listStockMovements({ productId, type, page }: StockMovementFilters) {
+  const where: Prisma.StockMovementWhereInput = {
+    ...(productId ? { productId } : {}),
+    ...(type ? { type } : {}),
+  };
+  const args = pageArgs(page);
+  const [rows, total] = await Promise.all([
+    prisma.stockMovement.findMany({
+      where,
+      include: {
+        product: { select: { id: true, sku: true, name: true } },
+        sale: { select: { id: true, invoiceNumber: true } },
+        createdBy: { select: { name: true } },
+      },
+      // id breaks ties between movements saved in the same millisecond (one sale, many items).
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: args.skip,
+      take: args.take,
+    }),
+    prisma.stockMovement.count({ where }),
+  ]);
+  return paginated(rows, total, args.page);
 }
