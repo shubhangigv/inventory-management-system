@@ -1,0 +1,38 @@
+// Prisma schema: describes the database tables for the inventory system.
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+// The connection URL lives in prisma.config.ts (Prisma v7), not here.
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id           String    @id @default(cuid())
+  sku          String    @unique
+  name         String
+  description  String?
+  price        Decimal   @db.Decimal(10, 2)
+  costPrice    Decimal   @db.Decimal(10, 2)
+  quantity     Int       @default(0)
+  reorderLevel Int       @default(10)
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([categoryId])
+}
