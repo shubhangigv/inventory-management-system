@@ -1,5 +1,15 @@
 // Prisma schema: describes the database tables for the inventory system.
 // Docs: https://pris.ly/d/prisma-schema
+//
+// Design rules used throughout:
+// - Money is always Decimal(12, 2), never Float, so totals never pick up rounding errors.
+// - Stock and quantities are whole numbers (Int).
+// - Product.stockQuantity only changes together with a StockMovement row
+//   (see lib/services/inventory.ts), so every change of stock is auditable.
+// - Completed sales copy the product name, SKU and prices they were sold at,
+//   so old invoices stay correct after a product is edited or deactivated.
+// - Extra safety rules Prisma cannot express (e.g. "stock can't go below 0")
+//   are CHECK constraints in prisma/migrations/*_init/migration.sql.
 
 generator client {
   provider = "prisma-client"
@@ -11,28 +21,212 @@ datasource db {
   provider = "postgresql"
 }
 
+// ---------- Enums ----------
+
+enum Role {
+  ADMIN // manages products, users and settings
+  STAFF // records sales and stock changes
+}
+
+enum StockMovementType {
+  STOCK_IN // goods received (supplier delivery, opening stock)
+  SALE // stock sold through a sale
+  SALE_CANCELLED // stock returned to the shelf because a sale was cancelled
+  ADJUSTMENT // manual correction: stock count, damage, loss (can be + or -)
+}
+
+enum SaleStatus {
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  BANK_TRANSFER
+  OTHER
+}
+
+// ---------- People ----------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String // never store plain passwords
+  role         Role     @default(STAFF)
+  // Users with history are deactivated, not deleted, so audit records keep their author.
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sales          Sale[]
+  stockMovements StockMovement[]
+}
+
+// ---------- Catalogue ----------
+
 model Category {
-  id          String    @id @default(cuid())
-  name        String    @unique
+  id          String   @id @default(cuid())
+  name        String   @unique
   description String?
-  products    Product[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
 }
 
 model Product {
-  id           String    @id @default(cuid())
-  sku          String    @unique
-  name         String
-  description  String?
-  price        Decimal   @db.Decimal(10, 2)
-  costPrice    Decimal   @db.Decimal(10, 2)
-  quantity     Int       @default(0)
-  reorderLevel Int       @default(10)
-  categoryId   String?
-  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String   @id @default(cuid())
+  sku           String   @unique // stored upper-case, see lib/validation
+  name          String
+  description   String?
+  costPrice     Decimal  @db.Decimal(12, 2) // what the business pays
+  sellingPrice  Decimal  @db.Decimal(12, 2) // what the customer pays (before tax)
+  // Current balance. Changed only by the inventory service, together with a StockMovement.
+  stockQuantity Int      @default(0)
+  reorderLevel  Int      @default(10) // "low stock" when stockQuantity <= reorderLevel
+  // Products with sales or stock history can't be deleted; set this to false instead.
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Deleting a category or supplier keeps the product, just without the link.
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  stockMovements StockMovement[]
+  saleItems      SaleItem[]
 
   @@index([categoryId])
+  @@index([supplierId])
+}
+
+// ---------- Stock ledger ----------
+
+// Append-only history of every stock change. Rows are never edited or deleted,
+// so there is no updatedAt. Summing quantityChange per product gives its stock.
+model StockMovement {
+  id             String            @id @default(cuid())
+  type           StockMovementType
+  quantityChange Int // positive = stock in, negative = stock out
+  stockAfter     Int // product balance right after this movement, for easy auditing
+  reason         String?
+  createdAt      DateTime          @default(now())
+
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  // Set when the movement was caused by a sale (SALE / SALE_CANCELLED).
+  saleId      String?
+  sale        Sale?   @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  // Who made the change (null for system actions such as the seed script).
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([productId, createdAt])
+  @@index([saleId])
+  @@index([createdById])
+  @@index([createdAt])
+}
+
+// ---------- Sales ----------
+
+model Sale {
+  id             String     @id @default(cuid())
+  invoiceNumber  String     @unique // e.g. INV-000123, generated from BusinessSettings
+  status         SaleStatus @default(COMPLETED)
+  customerName   String?
+  notes          String?
+  // Totals are stored (not recalculated) so the invoice never changes later,
+  // even if the tax rate in BusinessSettings changes.
+  subtotal       Decimal    @db.Decimal(12, 2) // sum of quantity * unitPrice
+  discountAmount Decimal    @default(0) @db.Decimal(12, 2)
+  taxAmount      Decimal    @default(0) @db.Decimal(12, 2)
+  totalAmount    Decimal    @db.Decimal(12, 2) // subtotal - discount + tax
+  soldAt         DateTime   @default(now()) // business date of the sale
+  cancelledAt    DateTime?
+  cancelReason   String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  items          SaleItem[]
+  payments       Payment[]
+  stockMovements StockMovement[]
+
+  @@index([soldAt])
+  @@index([status, soldAt])
+  @@index([createdById])
+}
+
+model SaleItem {
+  id          String  @id @default(cuid())
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(12, 2) // selling price at the time of sale
+  unitCost    Decimal @db.Decimal(12, 2) // cost price at the time of sale, for profit reports
+  // Snapshots, so the invoice still reads correctly after the product is renamed.
+  productName String
+  productSku  String
+
+  // Items belong to their sale: they only exist as part of it.
+  saleId    String
+  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  // A product that has been sold can't be deleted (deactivate it instead).
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  // One line per product per sale; repeated scans increase the quantity.
+  @@unique([saleId, productId])
+  @@index([productId])
+}
+
+// A sale can be paid with one or more payments (e.g. part cash, part UPI).
+// Together they must add up to Sale.totalAmount.
+model Payment {
+  id         String        @id @default(cuid())
+  method     PaymentMethod
+  amount     Decimal       @db.Decimal(12, 2)
+  reference  String? // card / UPI transaction ID
+  receivedAt DateTime      @default(now())
+
+  saleId String
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+}
+
+// ---------- Settings ----------
+
+// Exactly one row (id = 1, enforced by a CHECK constraint).
+model BusinessSettings {
+  id                Int      @id @default(1)
+  businessName      String   @default("My Store")
+  address           String?
+  phone             String?
+  email             String?
+  currencyCode      String   @default("INR") // ISO 4217 code, used to format money
+  taxRate           Decimal  @default(0) @db.Decimal(5, 2) // percent, e.g. 18.00
+  invoicePrefix     String   @default("INV")
+  // Next invoice number to hand out. Incremented inside the sale transaction,
+  // so two sales saved at the same moment never get the same number.
+  nextInvoiceNumber Int      @default(1)
+  updatedAt         DateTime @updatedAt
 }

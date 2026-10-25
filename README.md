@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Inventory Management System
 
-## Getting Started
+Next.js (App Router) + TypeScript + Tailwind CSS, with Prisma ORM v7 on a local PostgreSQL database (no Docker).
 
-First, run the development server:
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install            # also runs prisma generate
+copy .env.example .env # then put your real DATABASE_URL in .env (never commit it)
+npm run db:check       # can the app reach PostgreSQL?
+npm run db:migrate     # apply migrations (prisma migrate dev)
+npm run db:seed        # add sample data (safe to run again)
+npm run dev            # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`npm run db:setup` (Windows) creates the `inventory_app` login and `inventory_management` database if they don't exist yet.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | What it does |
+| --- | --- |
+| `npm run db:check` | Connects to PostgreSQL and prints the database, user and server version |
+| `npm run db:migrate` | Creates/applies migrations in development (`prisma migrate dev`) |
+| `npm run db:deploy` | Applies existing migrations only (`prisma migrate deploy`), for production |
+| `npm run db:generate` | Regenerates the Prisma Client into `app/generated/prisma` |
+| `npm run db:seed` | Inserts sample data; only creates rows that are missing |
+| `npm run db:verify` | Read-only consistency checks (stock vs. ledger, sale totals vs. items and payments) |
+| `npm run db:studio` | Opens Prisma Studio to browse the data |
+| `npm run lint` / `npm run typecheck` | ESLint / TypeScript checks |
 
-## Learn More
+## Database design
 
-To learn more about Next.js, take a look at the following resources:
+```
+Category 1─* Product *─1 Supplier
+                │
+                ├─* StockMovement *─0..1 Sale     (stock ledger)
+                └─* SaleItem *─1 Sale 1─* Payment
+User 1─* Sale,  User 1─* StockMovement             (who did it)
+BusinessSettings                                   (single row: name, tax rate, invoice numbering)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Money** uses `Decimal(12, 2)`; quantities use `Int`.
+- **Stock is auditable.** `Product.stockQuantity` only changes through `applyStockMovement()` in
+  `lib/services/inventory.ts`, which writes a `StockMovement` row in the same transaction.
+  The sum of a product's movements always equals its stock (`npm run db:verify` checks this).
+- **Sales are history.** A `SaleItem` copies the product name, SKU, selling price and cost price at
+  the time of sale, and the `Sale` stores its totals, so invoices never change after a product is edited.
+  Sales are cancelled (status `CANCELLED`, stock returned), never deleted.
+- **Payments** are separate rows, so one sale can be paid in several ways (e.g. card + UPI).
+  They must add up to the sale total.
+- **Deletion rules.** Products, sales and users with history can't be deleted (deactivate them instead).
+  Deleting a category or supplier only removes the link from its products.
+- **CHECK constraints** in the init migration stop impossible values (negative stock, negative prices)
+  even if application code has a bug.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Code layout
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+prisma/schema.prisma      tables, relations, indexes
+prisma/migrations/        SQL migrations (never edit one that has been applied)
+prisma/seed.ts            sample data
+lib/prisma.ts             the shared Prisma Client (PostgreSQL driver adapter)
+lib/validation/*.ts       Zod schemas for user input
+lib/services/*.ts         business logic and transactions (products, inventory, sales, settings)
+lib/money.ts              Decimal helpers and sale total calculation
+lib/errors.ts             AppError: expected errors with user-friendly messages
+scripts/                  db:check, db:verify, db:setup
+```

@@ -1,0 +1,26 @@
+import { Prisma } from "@/app/generated/prisma/client";
+
+// Errors the business logic throws on purpose. Their message is safe to show
+// to the user; any other error is an unexpected bug and should be logged.
+export type AppErrorCode =
+  | "NOT_FOUND"
+  | "CONFLICT"
+  | "INSUFFICIENT_STOCK"
+  | "PRODUCT_INACTIVE"
+  | "PAYMENT_MISMATCH"
+  | "INVALID_STATE";
+
+export class AppError extends Error {
+  constructor(
+    readonly code: AppErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AppError";
+  }
+}
+
+// P2002 = PostgreSQL rejected a duplicate value in a @unique column.
+export function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
