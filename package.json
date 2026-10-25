@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "postinstall": "prisma generate",
     "db:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-local-db.ps1",
     "db:check": "tsx scripts/check-db.ts",

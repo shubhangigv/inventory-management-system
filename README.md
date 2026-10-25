@@ -61,8 +61,31 @@ prisma/migrations/        SQL migrations (never edit one that has been applied)
 prisma/seed.ts            sample data
 lib/prisma.ts             the shared Prisma Client (PostgreSQL driver adapter)
 lib/validation/*.ts       Zod schemas for user input
-lib/services/*.ts         business logic and transactions (products, inventory, sales, settings)
+lib/services/*.ts         business logic and transactions (products, inventory, sales, catalogue,
+                          settings, reports); the only code that talks to the database
 lib/money.ts              Decimal helpers and sale total calculation
+lib/cents.ts              integer-cent totals for the browser (checkout preview only)
 lib/errors.ts             AppError: expected errors with user-friendly messages
+lib/action-state.ts       result type shared by Server Actions and forms (client-safe)
+lib/form-actions.ts       server-side helpers: FormData parsing, errors -> form feedback
+app/<area>/page.tsx       pages: dashboard (/), products, inventory, sales, categories,
+                          suppliers, settings
+app/<area>/actions.ts     Server Actions: read the form, call a service, refresh the pages
+app/components/           shared UI (buttons, cards, tables, form fields, nav, chart)
 scripts/                  db:check, db:verify, db:setup
 ```
+
+## How the app is built
+
+- **Pages** are Server Components. Data is read in an async component inside `<Suspense>`,
+  so the page frame shows instantly and the numbers stream in (required by Cache Components).
+  Nothing is cached: every request reads current stock and sales.
+- **Forms** call Server Actions through `useActionState`. An action validates with the Zod
+  schemas (via the service), returns field errors or a message, and calls `revalidateApp()` so
+  every page shows the new data.
+- **Client Components** never import `lib/services`, `lib/errors` or the Prisma client; prices
+  are passed to them as `"12.50"` strings because `Decimal` can't cross to the browser.
+- **The checkout** sends only product IDs, quantities and payments. The server reloads prices,
+  recalculates totals and rejects the sale if the payments don't match.
+- **Not built yet:** login and user roles. Actions carry a `TODO(auth)` where the session check
+  and `userId` belong; until then the ledger and sales record no user.
