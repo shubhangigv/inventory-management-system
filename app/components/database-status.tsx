@@ -12,7 +12,10 @@ async function getDatabaseInfo() {
     >`SELECT current_database() AS database, current_setting('server_version') AS version`;
     return { ok: true as const, ...info };
   } catch (error) {
-    console.error("Database check failed:", error);
+    // A warning (not an error) so the expected "no database yet" case
+    // doesn't open the Next.js error overlay in development.
+    const code = (error as { code?: string }).code ?? "unknown";
+    console.warn(`Database check failed (${code}). Is PostgreSQL running?`);
     return { ok: false as const };
   }
 }
