@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma generate",
+    "db:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-local-db.ps1",
     "db:check": "tsx scripts/check-db.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
