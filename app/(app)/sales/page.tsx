@@ -1,7 +1,7 @@
 import Form from "next/form";
 import Link from "next/link";
 import { Suspense } from "react";
-import { Plus, Search } from "lucide-react";
+import { Download, Plus, Search } from "lucide-react";
 import { SaleStatus } from "@/app/generated/prisma/enums";
 import { Pagination } from "@/app/components/pagination";
 import {
@@ -21,7 +21,7 @@ import { requireUser } from "@/lib/auth";
 import { formatDateTime, formatEnum, formatMoney } from "@/lib/format";
 import { listSales } from "@/lib/services/sales";
 import { readBusinessSettings } from "@/lib/services/settings";
-import { dateParam, enumParam, pageParam, param, type SearchParams } from "@/lib/search-params";
+import { dateParam, enumParam, pageParam, param, toQueryString, type SearchParams } from "@/lib/search-params";
 
 export const metadata = { title: "Sales" };
 
@@ -93,6 +93,9 @@ async function SalesTable({ searchParams }: { searchParams: Promise<SearchParams
         <button type="submit" className={buttonClass("secondary")}>
           <Search className="size-4" aria-hidden /> Filter
         </button>
+        <a href={`/sales/export${toQueryString(filters)}`} download className={buttonClass("secondary")}>
+          <Download className="size-4" aria-hidden /> Export CSV
+        </a>
       </Form>
 
       {sales.rows.length === 0 ? (

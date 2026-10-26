@@ -1,7 +1,7 @@
 import Form from "next/form";
 import Link from "next/link";
 import { Suspense } from "react";
-import { Plus, Search } from "lucide-react";
+import { Download, Plus, Search } from "lucide-react";
 import { Pagination } from "@/app/components/pagination";
 import { AdminOnly } from "@/app/components/user-menu";
 import {
@@ -22,7 +22,7 @@ import { formatMoney, formatNumber } from "@/lib/format";
 import { listCategoryOptions } from "@/lib/services/catalogue";
 import { listProducts, productStatusFilters } from "@/lib/services/products";
 import { readBusinessSettings } from "@/lib/services/settings";
-import { enumParam, pageParam, param, type SearchParams } from "@/lib/search-params";
+import { enumParam, pageParam, param, toQueryString, type SearchParams } from "@/lib/search-params";
 
 export const metadata = { title: "Products" };
 
@@ -88,6 +88,9 @@ async function ProductTable({ searchParams }: { searchParams: Promise<SearchPara
         <button type="submit" className={buttonClass("secondary")}>
           <Search className="size-4" aria-hidden /> Filter
         </button>
+        <a href={`/products/export${toQueryString(filters)}`} download className={buttonClass("secondary")}>
+          <Download className="size-4" aria-hidden /> Export CSV
+        </a>
       </Form>
 
       {products.rows.length === 0 ? (

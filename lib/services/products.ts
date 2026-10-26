@@ -100,8 +100,8 @@ export const lowStockWhere = {
   stockQuantity: { lte: prisma.product.fields.reorderLevel },
 } satisfies Prisma.ProductWhereInput;
 
-export async function listProducts({ query, categoryId, status = "active", page }: ProductListFilters) {
-  const where: Prisma.ProductWhereInput = {
+function productWhere({ query, categoryId, status = "active" }: ProductListFilters): Prisma.ProductWhereInput {
+  return {
     ...(query
       ? {
           OR: [
@@ -115,6 +115,10 @@ export async function listProducts({ query, categoryId, status = "active", page 
     ...(status === "inactive" && { isActive: false }),
     ...(status === "low" && lowStockWhere),
   };
+}
+
+export async function listProducts({ page, ...filters }: ProductListFilters) {
+  const where = productWhere(filters);
   const args = pageArgs(page);
   const [rows, total] = await Promise.all([
     prisma.product.findMany({
@@ -127,6 +131,15 @@ export async function listProducts({ query, categoryId, status = "active", page 
     prisma.product.count({ where }),
   ]);
   return paginated(rows, total, args.page);
+}
+
+/** Every product matching the filters (no paging), for the CSV export. */
+export function exportProducts(filters: Omit<ProductListFilters, "page">) {
+  return prisma.product.findMany({
+    where: productWhere(filters),
+    include: { category: { select: { name: true } }, supplier: { select: { name: true } } },
+    orderBy: { name: "asc" },
+  });
 }
 
 export function getProduct(id: string) {

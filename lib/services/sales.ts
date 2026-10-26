@@ -165,8 +165,8 @@ export type SaleListFilters = {
   page?: number;
 };
 
-export async function listSales({ query, status, from, to, page }: SaleListFilters) {
-  const where: Prisma.SaleWhereInput = {
+function saleWhere({ query, status, from, to }: SaleListFilters): Prisma.SaleWhereInput {
+  return {
     ...(query
       ? {
           OR: [
@@ -178,6 +178,10 @@ export async function listSales({ query, status, from, to, page }: SaleListFilte
     ...(status ? { status } : {}),
     ...(from || to ? { soldAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}),
   };
+}
+
+export async function listSales({ page, ...filters }: SaleListFilters) {
+  const where = saleWhere(filters);
   const args = pageArgs(page);
   const [rows, total] = await Promise.all([
     prisma.sale.findMany({
@@ -190,6 +194,19 @@ export async function listSales({ query, status, from, to, page }: SaleListFilte
     prisma.sale.count({ where }),
   ]);
   return paginated(rows, total, args.page);
+}
+
+/** Every sale matching the filters (no paging), oldest first, for the CSV export. */
+export function exportSales(filters: Omit<SaleListFilters, "page">) {
+  return prisma.sale.findMany({
+    where: saleWhere(filters),
+    include: {
+      createdBy: { select: { name: true } },
+      payments: { select: { method: true } },
+      _count: { select: { items: true } },
+    },
+    orderBy: [{ soldAt: "asc" }, { id: "asc" }],
+  });
 }
 
 export function getSale(id: string) {
