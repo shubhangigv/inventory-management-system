@@ -8,6 +8,7 @@ import "dotenv/config";
 import { prisma } from "../lib/prisma";
 import { createProduct } from "../lib/services/products";
 import { cancelSale, createSale } from "../lib/services/sales";
+import { createUser } from "../lib/services/users";
 
 const settings = {
   businessName: "Demo Store",
@@ -15,6 +16,14 @@ const settings = {
   taxRate: "18.00",
   invoicePrefix: "INV",
 };
+
+// Demo logins for development only. Never run the seed on a real shop's
+// database: anyone who reads this file knows these passwords.
+const DEMO_PASSWORD = "demo-password";
+const users = [
+  { name: "Demo Admin", email: "admin@demo.local", role: "ADMIN" as const },
+  { name: "Demo Staff", email: "staff@demo.local", role: "STAFF" as const },
+];
 
 const categories = [
   { name: "Electronics", description: "Devices and accessories" },
@@ -34,6 +43,16 @@ const products = [
   { sku: "STAT-002", name: "Gel Pen (Blue)", sellingPrice: "25.00", costPrice: "12.00", openingStock: 15, reorderLevel: 20, category: "Stationery", supplier: "PaperWorks Supplies" },
   { sku: "GROC-001", name: "Green Tea (100 bags)", sellingPrice: "350.00", costPrice: "220.00", openingStock: 60, category: "Groceries" },
 ];
+
+async function seedUsers() {
+  let created = 0;
+  for (const user of users) {
+    if (await prisma.user.findUnique({ where: { email: user.email }, select: { id: true } })) continue;
+    await createUser({ ...user, password: DEMO_PASSWORD });
+    created++;
+  }
+  console.log(`Users: ${created} created, ${users.length - created} already existed. Demo password: ${DEMO_PASSWORD}`);
+}
 
 const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
@@ -67,6 +86,7 @@ async function seedSales() {
     return;
   }
 
+  const { id: userId } = await prisma.user.findUniqueOrThrow({ where: { email: "staff@demo.local" } });
   const bySku = async (sku: string) => (await prisma.product.findUniqueOrThrow({ where: { sku } })).id;
   const [charger, mouse, notebook, pen, tea] = await Promise.all(
     ["ELEC-001", "ELEC-002", "STAT-001", "STAT-002", "GROC-001"].map(bySku),
@@ -77,7 +97,7 @@ async function seedSales() {
     items: [{ productId: notebook, quantity: 2 }, { productId: pen, quantity: 5 }],
     payments: [{ method: "CASH", amount: "430.70" }],
     soldAt: daysAgo(3),
-  });
+  }, { userId });
 
   // 1499 + 799 = 2298.00 - 98.00 discount = 2200.00, + 18% tax 396.00 = 2596.00, split card + UPI
   await createSale({
@@ -89,19 +109,20 @@ async function seedSales() {
     ],
     customerName: "Priya Sharma",
     soldAt: daysAgo(1),
-  });
+  }, { userId });
 
   // 3 x 350 = 1050.00, + 18% tax 189.00 = 1239.00, then cancelled (stock goes back)
   const cancelled = await createSale({
     items: [{ productId: tea, quantity: 3 }],
     payments: [{ method: "UPI", amount: "1239.00", reference: "UPI-DEMO-3003" }],
-  });
-  await cancelSale({ saleId: cancelled.id, reason: "Customer changed their mind" });
+  }, { userId });
+  await cancelSale({ saleId: cancelled.id, reason: "Customer changed their mind" }, { userId });
 
   console.log("Sales: 3 sample sales created (1 cancelled).");
 }
 
 async function main() {
+  await seedUsers();
   await seedCatalogue();
   await seedSales();
 }

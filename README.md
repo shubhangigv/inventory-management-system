@@ -13,6 +13,10 @@ npm run db:seed        # add sample data (safe to run again)
 npm run dev            # http://localhost:3000
 ```
 
+The seed creates two demo logins, both with the password `demo-password`:
+`admin@demo.local` (Admin) and `staff@demo.local` (Staff). They are for development only.
+On a real database, skip the seed and create the first admin with `npm run db:create-admin`.
+
 `npm run db:setup` (Windows) creates the `inventory_app` login and `inventory_management` database if they don't exist yet.
 
 ## Scripts
@@ -25,6 +29,7 @@ npm run dev            # http://localhost:3000
 | `npm run db:generate` | Regenerates the Prisma Client into `app/generated/prisma` |
 | `npm run db:seed` | Inserts sample data; only creates rows that are missing |
 | `npm run db:verify` | Read-only consistency checks (stock vs. ledger, sale totals vs. items and payments) |
+| `npm run db:create-admin` | Creates an admin account (asks for name, email and password) |
 | `npm run db:studio` | Opens Prisma Studio to browse the data |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript checks |
 
@@ -36,6 +41,7 @@ Category 1─* Product *─1 Supplier
                 ├─* StockMovement *─0..1 Sale     (stock ledger)
                 └─* SaleItem *─1 Sale 1─* Payment
 User 1─* Sale,  User 1─* StockMovement             (who did it)
+User 1─* Session                                   (logged-in browsers)
 BusinessSettings                                   (single row: name, tax rate, invoice numbering)
 ```
 
@@ -68,11 +74,17 @@ lib/cents.ts              integer-cent totals for the browser (checkout preview 
 lib/errors.ts             AppError: expected errors with user-friendly messages
 lib/action-state.ts       result type shared by Server Actions and forms (client-safe)
 lib/form-actions.ts       server-side helpers: FormData parsing, errors -> form feedback
-app/<area>/page.tsx       pages: dashboard (/), products, inventory, sales, categories,
-                          suppliers, settings
-app/<area>/actions.ts     Server Actions: read the form, call a service, refresh the pages
-app/components/           shared UI (buttons, cards, tables, form fields, nav, chart)
-scripts/                  db:check, db:verify, db:setup
+lib/auth.ts               who is logged in: session cookie, requireUser(), requireAdmin()
+lib/password.ts           scrypt password hashing
+proxy.ts                  sends visitors without a session cookie to /login (first gate only)
+app/login/                login page, login and logout actions
+app/(app)/<area>/page.tsx pages behind the login, sharing the sidebar layout: dashboard (/),
+                          products, inventory, sales, categories, suppliers, users, settings,
+                          account
+app/(app)/<area>/actions.ts  Server Actions: check the user, read the form, call a service,
+                          refresh the pages
+app/components/           shared UI (buttons, cards, tables, form fields, nav, chart, user menu)
+scripts/                  db:check, db:verify, db:setup, db:create-admin
 ```
 
 ## How the app is built
@@ -87,5 +99,24 @@ scripts/                  db:check, db:verify, db:setup
   are passed to them as `"12.50"` strings because `Decimal` can't cross to the browser.
 - **The checkout** sends only product IDs, quantities and payments. The server reloads prices,
   recalculates totals and rejects the sale if the payments don't match.
-- **Not built yet:** login and user roles. Actions carry a `TODO(auth)` where the session check
-  and `userId` belong; until then the ledger and sales record no user.
+- **Login** uses database sessions. The cookie (httpOnly, SameSite=Lax, Secure in production)
+  holds a random token; the `Session` table stores only its SHA-256 hash. Sessions last 7 days.
+  Logging out, deactivating a user or resetting their password deletes the rows, so access ends
+  at once. Passwords are hashed with scrypt.
+- **Every page and every Server Action checks the user itself** (`requireUser()` /
+  `requireAdmin()` in `lib/auth.ts`). `proxy.ts` only redirects visitors without a cookie, and
+  hiding buttons from staff is a convenience, not the protection.
+- **Roles:**
+
+  | | Staff | Admin |
+  | --- | :-: | :-: |
+  | View dashboard, products, stock history, sales | ✓ | ✓ |
+  | Make and cancel sales | ✓ | ✓ |
+  | Receive and adjust stock | ✓ | ✓ |
+  | Create, edit, deactivate products | | ✓ |
+  | Manage categories, suppliers, settings | | ✓ |
+  | Manage users | | ✓ |
+
+  Sales and stock movements record who made them. Admins can't change their own role or
+  deactivate themselves, and there is always at least one active admin.
+- **Not built yet:** limiting repeated login attempts (brute-force protection).
