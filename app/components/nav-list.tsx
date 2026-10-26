@@ -8,6 +8,7 @@ import {
   ShoppingCart,
   Tags,
   Truck,
+  Users,
 } from "lucide-react";
 import { cx } from "./ui";
 
@@ -19,7 +20,8 @@ export const navItems = [
   { href: "/inventory", label: "Stock history", icon: ArrowLeftRight },
   { href: "/categories", label: "Categories", icon: Tags },
   { href: "/suppliers", label: "Suppliers", icon: Truck },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/users", label: "Users", icon: Users, adminOnly: true },
+  { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
 ] as const;
 
 /** The most specific nav item that matches the path ("/sales/new" beats "/sales"). */
@@ -30,11 +32,12 @@ export function activeNavHref(pathname: string) {
   return matches.sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
 }
 
-/** Plain links; NavLinks adds the active state on the client. */
-export function NavList({ activeHref }: { activeHref: string | null }) {
+/** Plain links; NavLinks adds the active state on the client. Admin-only links are hidden from staff. */
+export function NavList({ activeHref, isAdmin }: { activeHref: string | null; isAdmin: boolean }) {
+  const items = navItems.filter((item) => isAdmin || !("adminOnly" in item));
   return (
     <ul className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
-      {navItems.map(({ href, label, icon: Icon }) => (
+      {items.map(({ href, label, icon: Icon }) => (
         <li key={href}>
           <Link
             href={href}

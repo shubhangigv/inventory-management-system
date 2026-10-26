@@ -42,7 +42,7 @@ export function ButtonLink({
 export const inputClass = cx(
   "block h-9 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 shadow-xs",
   "placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-500/20 focus:outline-none",
-  "aria-invalid:border-red-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
+  "aria-invalid:border-red-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
 );
 
 export const textareaClass = cx(inputClass, "h-auto min-h-20 py-2");
