@@ -17,7 +17,10 @@
     "db:seed": "prisma db seed",
     "db:verify": "tsx scripts/verify-data.ts",
     "db:create-admin": "tsx scripts/create-admin.ts",
-    "db:studio": "prisma studio"
+    "db:demo-history": "tsx scripts/generate-demo-history.ts",
+    "db:studio": "prisma studio",
+    "forecast:setup": "py -m venv forecasting/.venv && forecasting\\.venv\\Scripts\\python -m pip install -r forecasting/requirements.txt",
+    "forecast": "forecasting\\.venv\\Scripts\\python forecasting/forecast.py"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

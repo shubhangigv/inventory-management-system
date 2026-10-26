@@ -46,3 +46,7 @@ next-env.d.ts
 # agent skill symlinks (absolute paths, recreated by the skills installer)
 /.claude/skills/
 /.windsurf/skills/
+
+# Python virtual environment for the demand forecast
+/forecasting/.venv/
+__pycache__/

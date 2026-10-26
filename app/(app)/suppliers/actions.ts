@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/lib/action-state";
 import { requireAdmin } from "@/lib/auth";
-import { formError, formText, toActionError } from "@/lib/form-actions";
+import { formError, formInt, formText, toActionError } from "@/lib/form-actions";
 import { revalidateApp } from "@/lib/revalidate";
 import { createSupplier, deleteSupplier, updateSupplier } from "@/lib/services/catalogue";
 
@@ -17,6 +17,8 @@ function supplierFields(formData: FormData) {
     email: formText(formData, "email"),
     phone: formText(formData, "phone"),
     address: formText(formData, "address"),
+    leadTimeDays: formInt(formData, "leadTimeDays"),
+    orderCycleDays: formInt(formData, "orderCycleDays"),
   };
 }
 

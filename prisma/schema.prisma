@@ -109,6 +109,10 @@ model Supplier {
   email       String?
   phone       String?
   address     String?
+  // Used by the demand forecast to size orders: milk arrives the next day and
+  // is ordered daily; spices take 3 days and are ordered weekly.
+  leadTimeDays   Int      @default(2) // days from ordering to delivery
+  orderCycleDays Int      @default(7) // days between orders
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -138,6 +142,7 @@ model Product {
 
   stockMovements StockMovement[]
   saleItems      SaleItem[]
+  forecasts      DemandForecast[]
 
   @@index([categoryId])
   @@index([supplierId])
@@ -236,6 +241,71 @@ model Payment {
   sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   @@index([saleId])
+}
+
+// ---------- Demand forecasting ----------
+// Written by forecasting/forecast.py (Python, scikit-learn), read by the app.
+// A run is one training + forecast pass; its forecasts are never edited, so
+// older runs stay comparable. Quantities are Float: they are predictions, not stock.
+
+enum DemandClass {
+  FAST // 5 or more units a day (milk, bread)
+  MEDIUM // 1 to 5 a day
+  SLOW // under 1 a day, many days with no sale (spices)
+}
+
+enum ForecastMethod {
+  ML_MODEL // gradient-boosted trees on calendar + recent-sales features
+  MOVING_AVERAGE // average of the last 28 days (the baseline)
+}
+
+model ForecastRun {
+  id           String   @id
+  createdAt    DateTime @default(now())
+  historyDays  Int // days of sales history used for training
+  horizonDays  Int // days predicted ahead
+  leadTimeDays Int // default for products without a supplier (otherwise the supplier's)
+  reviewDays   Int // default order cycle for products without a supplier
+  serviceLevel Float // e.g. 0.95 = aim to not run out on 95% of order cycles
+  // Backtest on the last horizonDays of history, which the model never saw.
+  // WAPE = total absolute error / total units sold (0.2 = 20% off).
+  modelMae     Float
+  baselineMae  Float
+  chosenMae    Float // using the better method per product
+  modelWape    Float
+  baselineWape Float
+  chosenWape   Float
+
+  forecasts DemandForecast[]
+
+  @@index([createdAt])
+}
+
+model DemandForecast {
+  id             String         @id
+  demandClass    DemandClass
+  method         ForecastMethod // the method with the lower backtest error for this product
+  avgDailySales  Float // actual, last 28 days
+  forecastDaily  Float[] // predicted units for each of the next horizonDays days
+  forecastTotal  Float
+  modelMae       Float? // null when there wasn't enough history to train on
+  baselineMae    Float
+  stockOnHand    Int // stock when the forecast ran
+  daysOfStock    Float? // when the stock runs out at the forecast rate; null if no demand
+  stockoutDays   Int // days in the history the product was sold out (left out of training)
+  leadTimeDays   Int
+  reviewDays     Int
+  safetyStock    Int
+  reorderPoint   Int // order when stock is at or below this
+  suggestedOrder Int // 0 = no order needed yet
+
+  runId     String
+  run       ForecastRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, productId])
+  @@index([productId])
 }
 
 // ---------- Settings ----------

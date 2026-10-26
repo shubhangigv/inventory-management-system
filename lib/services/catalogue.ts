@@ -96,6 +96,8 @@ export async function updateSupplier(id: string, input: SupplierInput) {
         email: data.email ?? null,
         phone: data.phone ?? null,
         address: data.address ?? null,
+        leadTimeDays: data.leadTimeDays,
+        orderCycleDays: data.orderCycleDays,
       },
     });
   } catch (error) {

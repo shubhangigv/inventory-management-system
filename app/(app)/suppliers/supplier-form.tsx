@@ -11,6 +11,8 @@ export type SupplierFormValues = {
   email: string;
   phone: string;
   address: string;
+  leadTimeDays: string;
+  orderCycleDays: string;
 };
 
 export function SupplierForm({ action, supplier }: {
@@ -39,6 +41,12 @@ export function SupplierForm({ action, supplier }: {
         </Field>
         <Field label="Address" htmlFor="address" error={errors.address} className="sm:col-span-2">
           <textarea id="address" name="address" rows={3} maxLength={500} defaultValue={value("address")} className={textareaClass} />
+        </Field>
+        <Field label="Delivery time (days)" htmlFor="leadTimeDays" error={errors.leadTimeDays} hint="From placing an order to the goods arriving.">
+          <input id="leadTimeDays" name="leadTimeDays" type="number" min={0} max={60} step={1} required defaultValue={value("leadTimeDays") ?? "2"} className={inputClass} {...errorProps("leadTimeDays", errors.leadTimeDays)} />
+        </Field>
+        <Field label="Order every (days)" htmlFor="orderCycleDays" error={errors.orderCycleDays} hint="1 for daily deliveries like milk, 7 for a weekly order.">
+          <input id="orderCycleDays" name="orderCycleDays" type="number" min={1} max={60} step={1} required defaultValue={value("orderCycleDays") ?? "7"} className={inputClass} {...errorProps("orderCycleDays", errors.orderCycleDays)} />
         </Field>
       </div>
       <div className="flex gap-2">

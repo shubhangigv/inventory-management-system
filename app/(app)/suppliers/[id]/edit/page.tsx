@@ -34,6 +34,8 @@ async function EditSupplier({ params }: { params: Promise<{ id: string }> }) {
             email: supplier.email ?? "",
             phone: supplier.phone ?? "",
             address: supplier.address ?? "",
+            leadTimeDays: String(supplier.leadTimeDays),
+            orderCycleDays: String(supplier.orderCycleDays),
           }}
         />
       </Card>
