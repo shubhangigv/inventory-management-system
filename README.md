@@ -119,6 +119,11 @@ scripts/                  db:check, db:verify, db:setup, db:create-admin
 
   Sales and stock movements record who made them. Admins can't change their own role or
   deactivate themselves, and there is always at least one active admin.
+- **CSV export:** the Products and Sales pages have an *Export CSV* button that downloads
+  everything matching the current filters (`/products/export`, `/sales/export`). Cells that
+  start with `=`, `+`, `-` or `@` are prefixed with `'` so spreadsheets don't run them as formulas.
 - **Brute-force protection:** each failed login is stored in `LoginAttempt` by email. After 5
   failures in 15 minutes that email is locked until the window passes; a successful login
   clears its attempts. Unknown emails are limited the same way.
+
+See [docs/workflow.md](docs/workflow.md) for the day-to-day shop workflow and the developer workflow.
