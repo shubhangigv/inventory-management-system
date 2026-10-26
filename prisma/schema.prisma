@@ -80,6 +80,16 @@ model Session {
   @@index([userId])
 }
 
+// One row per failed login, used to slow down password guessing. Keyed by the
+// email typed (not a user ID), so unknown emails are limited the same way.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+}
+
 // ---------- Catalogue ----------
 
 model Category {

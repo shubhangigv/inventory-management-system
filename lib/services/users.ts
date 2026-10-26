@@ -33,6 +33,12 @@ function rethrow(error: unknown, email: string): never {
   throw error;
 }
 
+// Brute-force protection: after MAX_FAILED_LOGINS wrong passwords for one
+// email within LOGIN_WINDOW_MS, that email is locked until the oldest of
+// those attempts falls out of the window.
+export const MAX_FAILED_LOGINS = 5;
+export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+
 /**
  * Checks an email and password. Returns the user or throws INVALID_LOGIN.
  * The message is the same for an unknown email and a wrong password, so the
@@ -40,13 +46,26 @@ function rethrow(error: unknown, email: string): never {
  */
 export async function authenticate(input: LoginInput) {
   const { email, password } = loginSchema.parse(input);
+
+  const windowStart = new Date(Date.now() - LOGIN_WINDOW_MS);
+  // Housekeeping: attempts outside the window no longer count.
+  await prisma.loginAttempt.deleteMany({ where: { createdAt: { lt: windowStart } } });
+  const failures = await prisma.loginAttempt.count({ where: { email, createdAt: { gte: windowStart } } });
+  if (failures >= MAX_FAILED_LOGINS) {
+    throw new AppError("TOO_MANY_ATTEMPTS", "Too many failed attempts. Try again in 15 minutes.");
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     select: { id: true, isActive: true, passwordHash: true },
   });
   const valid = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
 
-  if (!user || !valid) throw new AppError("INVALID_LOGIN", "Email or password is incorrect.");
+  if (!user || !valid) {
+    await prisma.loginAttempt.create({ data: { email } });
+    throw new AppError("INVALID_LOGIN", "Email or password is incorrect.");
+  }
+  await prisma.loginAttempt.deleteMany({ where: { email } });
   // Only someone who knows the password learns that the account is deactivated.
   if (!user.isActive) throw new AppError("INVALID_LOGIN", "This account has been deactivated. Ask an admin.");
   return { id: user.id };

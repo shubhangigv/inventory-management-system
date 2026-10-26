@@ -10,6 +10,7 @@ export type AppErrorCode =
   | "PAYMENT_MISMATCH"
   | "INVALID_STATE"
   | "INVALID_LOGIN"
+  | "TOO_MANY_ATTEMPTS"
   | "FORBIDDEN";
 
 export class AppError extends Error {

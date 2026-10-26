@@ -119,4 +119,6 @@ scripts/                  db:check, db:verify, db:setup, db:create-admin
 
   Sales and stock movements record who made them. Admins can't change their own role or
   deactivate themselves, and there is always at least one active admin.
-- **Not built yet:** limiting repeated login attempts (brute-force protection).
+- **Brute-force protection:** each failed login is stored in `LoginAttempt` by email. After 5
+  failures in 15 minutes that email is locked until the window passes; a successful login
+  clears its attempts. Unknown emails are limited the same way.
