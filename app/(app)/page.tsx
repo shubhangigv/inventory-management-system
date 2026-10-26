@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Plus, TriangleAlert } from "lucide-react";
+import { ChartLine, Plus, TriangleAlert } from "lucide-react";
 import { RevenueChart } from "@/app/components/revenue-chart";
 import {
   Badge,
@@ -15,8 +15,9 @@ import {
   Th,
 } from "@/app/components/ui";
 import { requireUser } from "@/lib/auth";
-import { formatDateTime, formatEnum, formatMoney, formatNumber } from "@/lib/format";
+import { formatDateTime, formatDays, formatEnum, formatMoney, formatNumber } from "@/lib/format";
 import type { Decimal } from "@/lib/money";
+import { getReorderSuggestions } from "@/lib/services/forecasts";
 import { getDashboard } from "@/lib/services/reports";
 import { readBusinessSettings } from "@/lib/services/settings";
 
@@ -41,7 +42,7 @@ export default function DashboardPage() {
 
 async function Dashboard() {
   await requireUser(); // reading the session also keeps these live figures from being prerendered
-  const [data, settings] = await Promise.all([getDashboard(), readBusinessSettings()]);
+  const [data, settings, forecast] = await Promise.all([getDashboard(), readBusinessSettings(), getReorderSuggestions()]);
   const money = (value: Decimal | string) => formatMoney(value, settings.currencyCode);
 
   return (
@@ -114,6 +115,50 @@ async function Dashboard() {
           )}
         </Card>
       </div>
+
+      {forecast && (
+        <Card
+          title={
+            <span className="flex items-center gap-2">
+              <ChartLine className="size-4 text-zinc-500" aria-hidden />
+              Forecast: order now
+            </span>
+          }
+          actions={
+            <Link href="/forecast" className="text-sm text-zinc-500 hover:underline">
+              {forecast.count > forecast.rows.length ? `View all ${forecast.count}` : "Reorder plan"}
+            </Link>
+          }
+        >
+          {forecast.rows.length === 0 ? (
+            <EmptyState title="Nothing to order">The demand forecast says current stock covers every product until its next order.</EmptyState>
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Product</Th>
+                  <Th align="right">In stock</Th>
+                  <Th align="right">Lasts</Th>
+                  <Th align="right">Order qty</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {forecast.rows.map((row) => (
+                  <tr key={row.id}>
+                    <Td>
+                      <Link href={`/products/${row.product.id}`} className="font-medium hover:underline">{row.product.name}</Link>
+                      {row.product.supplier && <div className="text-xs text-zinc-500">{row.product.supplier.name}</div>}
+                    </Td>
+                    <Td align="right" className="tabular-nums">{formatNumber(row.product.stockQuantity)}</Td>
+                    <Td align="right" className="tabular-nums whitespace-nowrap">{formatDays(row.advice.daysOfStock)}</Td>
+                    <Td align="right" className="font-medium tabular-nums">{formatNumber(row.advice.suggestedOrder)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card

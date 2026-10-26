@@ -15,7 +15,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex h-full flex-col gap-3 p-3 md:gap-6 md:p-4">
           <Link href="/" className="flex items-center gap-2 px-2 font-semibold tracking-tight">
             <Boxes className="size-5" aria-hidden />
-            Inventory
+            Stockora
           </Link>
           <nav aria-label="Main">
             {/* The user (and usePathname, on dynamic routes) are request data; until they

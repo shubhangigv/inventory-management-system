@@ -22,6 +22,14 @@ export function formatDateTime(date: Date) {
   return new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+/** A forecast duration: "0.7 days", "1 day", "60+ days"; "—" when unknown. */
+export function formatDays(days: number | null) {
+  if (days === null) return "—";
+  if (days >= 60) return "60+ days";
+  const rounded = Math.round(days * 10) / 10;
+  return `${new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 1 }).format(rounded)} ${rounded === 1 ? "day" : "days"}`;
+}
+
 /** "BANK_TRANSFER" -> "Bank transfer" */
 export function formatEnum(value: string) {
   const text = value.toLowerCase().replaceAll("_", " ");

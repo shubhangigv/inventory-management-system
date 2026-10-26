@@ -1,4 +1,4 @@
-# Inventory Management System
+# Stockora: inventory, sales and demand forecasting
 
 Next.js (App Router) + TypeScript + Tailwind CSS, with Prisma ORM v7 on a local PostgreSQL database (no Docker).
 

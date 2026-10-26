@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Inventory Management System", template: "%s · Inventory" },
-  description: "Manage products, stock and sales",
+  title: { default: "Stockora", template: "%s · Stockora" },
+  description: "Inventory, sales and AI demand forecasting",
 };
 
 // The app's pages and their sidebar live in app/(app)/layout.tsx; the login

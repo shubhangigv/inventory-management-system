@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   ArrowLeftRight,
+  ChartLine,
   LayoutDashboard,
   Package,
   Receipt,
@@ -18,6 +19,7 @@ export const navItems = [
   { href: "/sales", label: "Sales", icon: Receipt },
   { href: "/products", label: "Products", icon: Package },
   { href: "/inventory", label: "Stock history", icon: ArrowLeftRight },
+  { href: "/forecast", label: "Forecast", icon: ChartLine },
   { href: "/categories", label: "Categories", icon: Tags },
   { href: "/suppliers", label: "Suppliers", icon: Truck },
   { href: "/users", label: "Users", icon: Users, adminOnly: true },

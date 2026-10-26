@@ -6,8 +6,10 @@ import { StockForm } from "@/app/(app)/inventory/stock-form";
 import { MovementTable } from "@/app/(app)/inventory/movement-table";
 import { ButtonLink, Card, PageHeader, Skeleton, StockBadge, TableSkeleton } from "@/app/components/ui";
 import { requireUser } from "@/lib/auth";
-import { formatMoney, formatNumber } from "@/lib/format";
+import { DemandChart } from "@/app/components/demand-chart";
+import { formatDateTime, formatDays, formatMoney, formatNumber } from "@/lib/format";
 import { Decimal } from "@/lib/money";
+import { getProductDemand, reorderAdvice } from "@/lib/services/forecasts";
 import { listStockMovements } from "@/lib/services/inventory";
 import { getProduct } from "@/lib/services/products";
 import { readBusinessSettings } from "@/lib/services/settings";
@@ -27,12 +29,14 @@ async function ProductDetails({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requireUser();
   const isAdmin = user.role === "ADMIN";
-  const [product, movements, settings] = await Promise.all([
+  const [product, movements, settings, demand] = await Promise.all([
     getProduct(id),
     listStockMovements({ productId: id }),
     readBusinessSettings(),
+    getProductDemand(id),
   ]);
   if (!product) notFound();
+  const advice = demand && reorderAdvice(demand.forecast, product.stockQuantity);
 
   const money = (value: Decimal) => formatMoney(value, settings.currencyCode);
   const margin = product.sellingPrice.minus(product.costPrice);
@@ -88,6 +92,37 @@ async function ProductDetails({ params }: { params: Promise<{ id: string }> }) {
               {product.description && <Detail label="Description" value={product.description} className="sm:col-span-3" />}
             </dl>
           </Card>
+
+          {demand && (
+            <Card
+              title="Demand forecast"
+              actions={
+                <Link href="/forecast" className="text-sm text-zinc-500 hover:underline">
+                  Reorder plan
+                </Link>
+              }
+            >
+              <div className="flex flex-col gap-4 p-4">
+                <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+                  <Detail label="Next 14 days" value={`${formatNumber(Math.round(demand.forecast.forecastTotal))} units`} />
+                  <Detail
+                    label="Stock lasts"
+                    value={formatDays(advice?.daysOfStock ?? null)}
+                  />
+                  <Detail label="Reorder at" value={formatNumber(demand.forecast.reorderPoint)} />
+                  <Detail
+                    label="Suggested order"
+                    value={advice && advice.suggestedOrder > 0 ? `${formatNumber(advice.suggestedOrder)} units` : "None yet"}
+                  />
+                </dl>
+                <DemandChart data={demand.points} />
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {demand.forecast.method === "ML_MODEL" ? "Machine-learning model" : "28-day average"} (lower error in
+                  backtests for this product). Forecast from {formatDateTime(demand.forecast.run.createdAt)}.
+                </p>
+              </div>
+            </Card>
+          )}
 
           <Card
             title="Stock history"

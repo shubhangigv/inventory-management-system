@@ -15,7 +15,7 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
       <div className="flex w-full max-w-sm flex-col gap-6">
         <div className="flex flex-col items-center gap-2 text-center">
           <Boxes className="size-8" aria-hidden />
-          <h1 className="text-xl font-semibold tracking-tight">Log in to Inventory</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Log in to Stockora</h1>
         </div>
         <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-xs dark:border-zinc-800 dark:bg-zinc-950">
           <Suspense fallback={<LoginSkeleton />}>
