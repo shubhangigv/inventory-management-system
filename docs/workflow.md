@@ -10,15 +10,17 @@ Admin sets up            Stock arrives            Customer buys            End o
 Settings (name, tax,  →  Inventory → Receive  →   Sales → New sale     →   Dashboard: revenue,
 invoice prefix)          stock (STOCK_IN)         (POS checkout)            low stock, top items
 Categories, Suppliers                             invoice INV-000123       Sales → Export CSV
-Products (SKU, prices,   Count / damage? →        stock goes down          Products → Low stock
-reorder level)           Adjust stock             automatically            → reorder from supplier
-Users (Admin / Staff)    (ADJUSTMENT, ±)  
+Products (SKU, prices,   Count / damage? →        stock goes down          Forecast → reorder plan:
+reorder level)           Adjust stock             automatically            what to order, how much
+Users (Admin / Staff)    (ADJUSTMENT, ±)                                   → order from supplier
 ```
 
 ### Setting up (Admin, once)
 1. Log in as an admin (`admin@demo.local` / `demo-password` on the dev database).
 2. **Settings**: business name, address, currency, tax rate (%), invoice prefix.
-3. **Categories** and **Suppliers**: create the lists products will use.
+3. **Categories** and **Suppliers**: create the lists products will use. For each supplier set the
+   delivery time and how often you order (milk: 1 and 1 day; a wholesaler: 3 and 7 days). The
+   forecast uses them to size orders.
 4. **Products → New product**: SKU, name, cost price, selling price, reorder level,
    category, supplier and opening stock.
 5. **Users**: add staff accounts. Staff can sell and move stock; only admins edit the catalogue,
@@ -43,9 +45,18 @@ Users (Admin / Staff)    (ADJUSTMENT, ±)
 ### Reviewing
 - **Dashboard**: revenue and gross profit for today and the last 30 days, a 14-day revenue chart,
   low-stock products, top products and recent sales.
-- **Products → Low stock** filter: everything at or below its reorder level. Use **Export CSV** to
-  send the list to a supplier.
 - **Sales**: filter by date, status or customer, then **Export CSV** for accounting.
+
+### Reordering with the demand forecast
+1. Each morning an admin presses **Forecast → Run forecast** (about 20 seconds). The model retrains
+   on the latest sales and predicts the next 14 days for every product with 6+ weeks of history.
+2. The **Reorder plan** lists products most urgent first: *Order now* (at or below the reorder
+   point), *Order soon* (runs out before the next order would arrive), *OK*.
+3. Order the **Order qty** from each supplier, then **Receive stock** when it arrives. The plan
+   updates straight away, because it compares the forecast with current stock.
+4. Each product page shows its last 4 weeks of sales and the forecast as a chart.
+5. Products without enough history (new products) still use the fixed reorder level:
+   **Products → Low stock**.
 
 ### Accounts and security
 - **Account**: change your own password (other browsers are logged out).
@@ -71,6 +82,20 @@ Browser form ──► proxy.ts ──► Server Action (app/(app)/<area>/action
 Pages read data the same way: a Server Component calls `requireUser()`, then a service, inside
 `<Suspense>`. CSV downloads are route handlers (`app/(app)/products/export`, `app/(app)/sales/export`).
 
+The forecast is a separate batch job that shares the database:
+
+```
+Run forecast (admin) ──► lib/services/forecasts.ts runForecast()
+                           │ execFile: forecasting/.venv python forecasting/forecast.py
+                           ▼
+                         forecast.py: read daily sales + stockouts ─► train model ─► backtest
+                           │          vs 28-day average ─► forecast 14 days ─► reorder maths
+                           ▼
+                         INSERT ForecastRun + DemandForecast rows
+                           │
+Forecast page / dashboard / product chart ◄── read latest run, recalc against current stock
+```
+
 ## 3. Developer workflow
 
 ### First run (Windows, local PostgreSQL)
@@ -80,6 +105,9 @@ copy .env.example .env      # set DATABASE_URL
 npm run db:setup            # creates the inventory_app login and database (once)
 npm run db:migrate          # apply migrations
 npm run db:seed             # demo data + demo logins
+npm run forecast:setup      # Python venv with scikit-learn (once)
+npm run db:demo-history     # 6 months of sales for the forecast to learn from
+npm run forecast            # first forecast run
 npm run dev                 # http://localhost:3000
 ```
 
@@ -102,7 +130,10 @@ npm run dev                 # http://localhost:3000
 npm ci
 npm run db:deploy           # apply migrations only, never prisma migrate dev
 npm run db:create-admin     # first admin (don't seed a real database)
+npm run forecast:setup      # Python 3.11+ must be installed on the server
 npm run build
 npm run start               # serve on port 3000 (behind HTTPS so the Secure cookie works)
 ```
-Set `DATABASE_URL` and `NODE_ENV=production` in the server environment.
+Set `DATABASE_URL` and `NODE_ENV=production` in the server environment (and `FORECAST_PYTHON`
+if Python lives somewhere other than `forecasting/.venv`). Schedule `npm run forecast` once a day
+(Windows Task Scheduler or cron) so the reorder plan is ready each morning.
