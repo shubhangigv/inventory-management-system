@@ -1,3 +1,4 @@
+import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 import type { ActionState } from "@/lib/action-state";
 import { AppError } from "@/lib/errors";
@@ -9,9 +10,12 @@ import { AppError } from "@/lib/errors";
  * Turns an expected failure into form feedback. Unexpected errors are logged
  * and replaced by a generic message, so internals never reach the browser.
  *
- * Never wrap redirect() in a try that calls this: redirect works by throwing.
+ * redirect() works by throwing. A redirect from requireUser() inside the try
+ * is passed on by unstable_rethrow; still, keep the action's own redirect()
+ * after the try, where it's obvious.
  */
 export function toActionError(error: unknown): ActionState {
+  unstable_rethrow(error);
   if (error instanceof z.ZodError) {
     const { formErrors, fieldErrors } = z.flattenError(error);
     return { error: formErrors[0] ?? "Please fix the highlighted fields.", fieldErrors };
@@ -23,11 +27,14 @@ export function toActionError(error: unknown): ActionState {
   return { error: "Something went wrong. Please try again." };
 }
 
-/** toActionError plus the submitted values, for forms that should keep their input. */
+/**
+ * toActionError plus the submitted values, for forms that should keep their input.
+ * Password fields are never sent back: the user retypes them.
+ */
 export function formError(error: unknown, formData: FormData): ActionState {
   const values: Record<string, string> = {};
   for (const [key, value] of formData) {
-    if (typeof value === "string" && !key.startsWith("$ACTION")) values[key] = value;
+    if (typeof value === "string" && !key.startsWith("$ACTION") && !/password/i.test(key)) values[key] = value;
   }
   return { ...toActionError(error), values };
 }
@@ -42,6 +49,12 @@ export function formText(formData: FormData, key: string): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed === "" ? undefined : trimmed;
+}
+
+/** A password exactly as typed: not trimmed, since spaces can be part of it. */
+export function formPassword(formData: FormData, key: string): string {
+  const value = formData.get(key);
+  return typeof value === "string" ? value : "";
 }
 
 /** A whole number, undefined when empty, NaN when not a number (Zod reports it). */

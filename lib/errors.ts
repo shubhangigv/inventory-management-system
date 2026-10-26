@@ -8,7 +8,9 @@ export type AppErrorCode =
   | "INSUFFICIENT_STOCK"
   | "PRODUCT_INACTIVE"
   | "PAYMENT_MISMATCH"
-  | "INVALID_STATE";
+  | "INVALID_STATE"
+  | "INVALID_LOGIN"
+  | "FORBIDDEN";
 
 export class AppError extends Error {
   constructor(

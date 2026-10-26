@@ -61,8 +61,23 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  sessions       Session[]
   sales          Sale[]
   stockMovements StockMovement[]
+}
+
+// A logged-in browser. The cookie holds a random token; only its SHA-256 hash
+// is stored here, so a leaked database can't be used to log in. Deleting the
+// row logs that browser out immediately.
+model Session {
+  id        String   @id // SHA-256 of the cookie token (hex)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ---------- Catalogue ----------
